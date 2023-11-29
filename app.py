@@ -1,9 +1,7 @@
-import tushare as ts
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import time
-import psycopg2.extras
 import os
 import streamlit as st
 
