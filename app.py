@@ -5,6 +5,7 @@ import time
 import os
 import streamlit as st
 
+#Finds the largest value that is smaller than the target value. This is useful for finding the most recent date that is a trade day, given a non trade day
 def find_largest_smaller_value(my_list, target_value):
     # Initialize a variable to store the largest value found so far
     largest_smaller_value = None
@@ -18,6 +19,7 @@ def find_largest_smaller_value(my_list, target_value):
     return largest_smaller_value
 
 def read_splitted_data(folder_path):
+    #Large data are stored as multiple csv files so they can be uploaded to github. To use them, we have to read and concatenate them together into 1 df.
     dfs = []
     for file_name in os.listdir(folder_path):
         dfs.append(pd.read_csv(folder_path+file_name))
@@ -30,16 +32,20 @@ def get_stock_basic():
     return pd.read_csv("data/stock_basic.csv")
 
 def get_company_data_of_date(date):
-    #To save time, first check if the most recent company data contains the inputted date. If does not contain date, then search through ALL the data.
-    recent_company_data = pd.read_csv("data/daily_company_data/1.csv")
-    company_data_in_time_span = recent_company_data.loc[recent_company_data['trade_date']==date]
-    if company_data_in_time_span.shape[0]>5300:
-        return company_data_in_time_span
+    #Gets the daily company data of a single given day
 
+    #Since we most likely use data of the current year, we can first only check if the data of given date is in the most recent data, which is stored as the first file in the folder.
+    recent_company_data = pd.read_csv("data/daily_company_data/1.csv")
+    #Check if the data in the correct date has more than 5300 stocks, in case of the data missing some stocks
+    data_of_date = recent_company_data.loc[recent_company_data['trade_date']==date]
+    if data_of_date.shape[0]>5300:
+        return data_of_date
+
+    #If the data corresponding to the date cannot be found in the first chunk, then search through all data chunks
     company_data = read_splitted_data("data/daily_company_data/")
     most_recent_date = find_largest_smaller_value(set(company_data['trade_date']),date)
-    company_data_in_time_span = company_data.loc[company_data['trade_date']==most_recent_date]
-    return company_data_in_time_span
+    data_of_date = company_data.loc[company_data['trade_date']==most_recent_date]
+    return data_of_date
 
 def get_daily_std_data():
     return pd.read_csv("data/daily_std_data.csv")
@@ -48,6 +54,9 @@ def get_daily_vol_data():
     return read_splitted_data("data/daily_vol_data/")
 
 def get_dates_for_c1(end_date,days_to_calculate):
+    #Finds the start_date for calculations of c1, given the end_date and days_to_calculate
+    #Note that some days are non trade days
+
     unique_trade_days = list(get_daily_std_data().sort_values('trade_date')['trade_date'].unique())
     
     if end_date in unique_trade_days:
@@ -85,6 +94,10 @@ def calculate_c1(end_date,days_to_calculate):
     return result_df
 
 def get_dates_for_c2_or_c3(input_end_date,past_days,recent_days,rating_name):
+    #c2 and c3 have 2 periods: "past" and "recent". 
+    #This function gets the past_start_date, past_end_date and recent_start_date, given the recent_end_date, and the number of days of each period.
+    #Note that some days are not trade days, and the input end date also might not be a trade day
+
     if rating_name=="c2":
         unique_trade_days = list(get_daily_std_data().sort_values('trade_date')['trade_date'].unique())
     else:
@@ -177,6 +190,7 @@ def display_table(df):
     st.dataframe(df)
 
 def improve_index_column(df):
+    #Improves the index column of a df for user readability, naming the index column into chinese, and increasing the indexes by 1
     df['排名'] = np.arange(1,df.shape[0]+1)
     df = df.set_index('排名')
     return df
@@ -190,25 +204,30 @@ def get_stock_name_given_code(code):
         return selected_df['name'][0]
 
 def clean_stocks_to_display_input(raw_input):
+    #Cleans inputted stock specifications from user, which is 1 string, similar to "000001.SZ,平安银行，000005.SZ"
+    #The user might either use the stock code or the stock name (in chinese), as well as using english or chinese commas to separate the stocks
+
     if raw_input == "":
         return []
 
-    #Split by both english and chinese periods
+    #Split by both english and chinese commans
     splitted_list_stage_1 = raw_input.split(",")
     splitted_list = []
     for i in splitted_list_stage_1:
         result_list = i.split("，")
         splitted_list.extend(result_list)
 
+    #Convert data into a list of stock names
     processed_results = []
-    for stock_name_or_id in splitted_list:
-        if "." in stock_name_or_id:
-            stock_name = get_stock_name_given_code(stock_name_or_id)
+    for stock_name_or_code in splitted_list:
+        #Checking whether the stock name/code contains a period, is a good way differentiate between stock code and stock name
+        if "." in stock_name_or_code:
+            stock_name = get_stock_name_given_code(stock_name_or_code)
             if stock_name is None:
-                st.error(f"没有找到‘{stock_name_or_id}’对应的股票数据，请确认代码输入正确")
+                st.error(f"没有找到‘{stock_name_or_code}’对应的股票数据，请确认代码输入正确")
             processed_results.append(stock_name)
         else:
-            processed_results.append(stock_name_or_id)
+            processed_results.append(stock_name_or_code)
 
     return processed_results
 
