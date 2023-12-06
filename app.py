@@ -249,7 +249,7 @@ def calculate_rating_rankings(recent_end_date,c1_recent_period_day_count,c2_past
     return total_data
 
 #---------------------------------------------
-st.title("股票强势系数分析-V4")
+st.title("股票强势系数分析-V4.1")
 
 st.markdown('<p style="font-size:20px; color:red;"> 数据更新日期：', unsafe_allow_html=True)
 c1_last_update_date = get_last_update_date("c1")
