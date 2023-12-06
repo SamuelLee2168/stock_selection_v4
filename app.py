@@ -81,16 +81,8 @@ def get_avg_std_in_time_period(start,end):
 
 def calculate_c1(end_date,days_to_calculate):
     start_date,end_date = get_dates_for_c1(end_date,days_to_calculate)
-    result_df = get_avg_std_in_time_period(start_date,end_date).sort_values("std",ascending=False)
-
-    stock_basic = get_stock_basic()
-    company_data = get_company_data_of_date(end_date)
-        
-    result_df = result_df.merge(stock_basic,on='ts_code',how='left').merge(company_data,on='ts_code',how='left')[['name','list_date','industry','total_mv','std']]
-    result_df['total_mv'] = np.round(result_df['total_mv']/10000,2)
-    result_df['std'] = np.round(result_df['std'],4)
-    result_df['list_date'] = result_df['list_date'].astype(str)
-    result_df.columns = ['股票名称','上市日期','行业','总市值(亿元)','波动性']
+    result_df = get_avg_std_in_time_period(start_date,end_date).sort_values("std",ascending=False).reset_index(drop=True)
+    result_df.columns = ['ts_code','c1_rating']
     return result_df
 
 def get_dates_for_c2_or_c3(input_end_date,past_days,recent_days,rating_name):
@@ -124,34 +116,23 @@ def calculate_c2(recent_end_date,past_period_day_count,recent_period_day_count):
     past_start_date,past_end_date,recent_start_date,recent_end_date = get_dates_for_c2_or_c3(recent_end_date,past_period_day_count,recent_period_day_count,rating_name="c2")
     
     recent_std = get_avg_std_in_time_period(recent_start_date,recent_end_date)
-    recent_std.columns = ['ts_code','recent_std']
+    recent_std.columns = ['ts_code','c2_recent_std']
     past_std = get_avg_std_in_time_period(past_start_date,past_end_date)
-    past_std.columns = ['ts_code','past_std']
+    past_std.columns = ['ts_code','c2_past_std']
     result_df = recent_std.merge(past_std,on='ts_code',how='inner')
     
     std_changes = []
     for i in np.arange(result_df.shape[0]):
         row = result_df.iloc[i]
-        recent_std = row['recent_std']
-        past_std = row['past_std']
+        recent_std = row['c2_recent_std']
+        past_std = row['c2_past_std']
         if past_std != 0:
             std_changes.append((recent_std-past_std)/past_std*100)
         else:
             std_changes.append(0)
     
-    result_df['std_change_pct'] = std_changes
-    result_df = result_df.sort_values("std_change_pct",ascending=False)
-
-    stock_basic = get_stock_basic()
-    company_data = get_company_data_of_date(recent_end_date)
-        
-    result_df = result_df.merge(stock_basic,on='ts_code',how='left').merge(company_data,on='ts_code',how='left')[['name','list_date','industry','total_mv','past_std','recent_std','std_change_pct']]
-    result_df['total_mv'] = np.round(result_df['total_mv'].astype(float)/10000,2)
-    result_df['past_std'] = np.round(result_df['past_std'],4)
-    result_df['recent_std'] = np.round(result_df['recent_std'],4)
-    result_df['std_change_pct'] = np.round(result_df['std_change_pct'],2)
-    result_df['list_date'] = result_df['list_date'].astype(str)
-    result_df.columns = ['股票名称','上市日期','行业','总市值(亿元)','以前波动性','近期波动性','波动性涨跌百分比']
+    result_df['c2_rating'] = std_changes
+    result_df = result_df.sort_values("c2_rating",ascending=False).reset_index(drop=True)
     return result_df
 
 def calculate_avg_vol_in_period(vol_data,start_date,end_date):
@@ -166,24 +147,13 @@ def calculate_c3(recent_end_date,past_period_day_count,recent_period_day_count):
     vol = get_daily_vol_data()
 
     past_vol = calculate_avg_vol_in_period(vol,past_start_date,past_end_date)
-    past_vol.columns = ['ts_code','past_vol']
+    past_vol.columns = ['ts_code','c3_past_vol']
     recent_vol = calculate_avg_vol_in_period(vol,recent_start_date,recent_end_date)
-    recent_vol.columns = ['ts_code','recent_vol']
+    recent_vol.columns = ['ts_code','c3_recent_vol']
     
     result_df = past_vol.merge(recent_vol,on='ts_code',how='inner')
-    result_df['vol_pct_change'] = (result_df['recent_vol']-result_df['past_vol'])/result_df['past_vol']*100
-    result_df = result_df.sort_values("vol_pct_change",ascending=False)
-
-    stock_basic = get_stock_basic()
-    company_data = get_company_data_of_date(recent_end_date)
-        
-    result_df = result_df.merge(stock_basic,on='ts_code',how='left').merge(company_data,on='ts_code',how='left')[['name','list_date','industry','total_mv','past_vol','recent_vol','vol_pct_change']]
-    result_df['total_mv'] = np.round(result_df['total_mv'].astype(float)/10000,2)
-    result_df['past_vol'] = np.round(result_df['past_vol'],2)
-    result_df['recent_vol'] = np.round(result_df['recent_vol'],2)
-    result_df['vol_pct_change'] = np.round(result_df['vol_pct_change'],2)
-    result_df['list_date'] = result_df['list_date'].astype(str)
-    result_df.columns = ['股票名称','上市日期','行业','总市值(亿元)','以前平均成交量(手)','近期平均交易量(手)','交易量涨跌百分比']
+    result_df['c3_rating'] = (result_df['c3_recent_vol']-result_df['c3_past_vol'])/result_df['c3_past_vol']*100
+    result_df = result_df.sort_values("c3_rating",ascending=False).reset_index(drop=True)
     return result_df
 
 def display_table(df):
@@ -242,58 +212,71 @@ def get_last_update_date(rating_name):
     most_common_date = value_counts['trade_date'][0]
     return most_common_date
 
+def add_ranking_column(df,column_to_sort,ranking_column_name):
+    result_df = df.sort_values(column_to_sort,ascending=False).reset_index(drop=True)
+    result_df = result_df.reset_index().rename(columns={"index":ranking_column_name})
+    result_df[ranking_column_name] = result_df[ranking_column_name]+1
+    return result_df
+
+def set_special_color_for_columns(df,columns,transparency):
+    return df.style.set_properties(**{'background-color': f'rgba(255, 255, 0, {transparency})'}, subset=columns)
+
+def calculate_rating_rankings(recent_end_date,c1_recent_period_day_count,c2_past_period_day_count,c2_recent_period_day_count,c3_past_period_day_count,c3_recent_period_day_count):
+    c1_data = calculate_c1(recent_end_date,c1_recent_period_day_count)
+    c2_data = calculate_c2(recent_end_date,c2_past_period_day_count,c2_recent_period_day_count)
+    c3_data = calculate_c3(recent_end_date,c3_past_period_day_count,c3_recent_period_day_count)
+    
+    stock_basic = get_stock_basic()
+    company_data = get_company_data_of_date(recent_end_date)
+    total_data = c1_data.merge(c2_data,on='ts_code',how='inner').merge(c3_data,on='ts_code',how='inner')
+    total_data = total_data.merge(stock_basic,on='ts_code',how='left').merge(company_data,on='ts_code',how='left')
+    total_data = add_ranking_column(total_data,"c1_rating","c1_ranking")
+    total_data = add_ranking_column(total_data,"c2_rating","c2_ranking")
+    total_data = add_ranking_column(total_data,"c3_rating","c3_ranking")
+    total_data = total_data[['name','list_date','industry','total_mv','c1_ranking','c1_rating','c2_ranking','c2_rating','c3_ranking','c3_rating','c2_past_std','c2_recent_std','c3_past_vol','c3_recent_vol']]
+    total_data['total_mv'] = np.round(total_data['total_mv'].astype(float)/10000,2)
+    total_data['list_date'] = total_data['list_date'].astype(str)
+    total_data['c1_rating'] = np.round(total_data['c1_rating'],4)
+    total_data['c2_rating'] = np.round(total_data['c2_rating'],2)
+    total_data['c3_rating'] = np.round(total_data['c3_rating'],2)
+    total_data['c2_past_std'] = np.round(total_data['c2_past_std'],4)
+    total_data['c2_recent_std'] = np.round(total_data['c2_recent_std'],4)
+    total_data['c3_past_vol'] = np.round(total_data['c3_past_vol'],2)
+    total_data['c3_recent_vol'] = np.round(total_data['c3_recent_vol'],2)
+    total_data = total_data.sort_values("c3_rating",ascending=False)
+    total_data.columns = ['股票名称','上市日期','行业','总市值(亿元)','C1排名','C1数值(波动性)','C2排名','C2数值(波动性涨跌%)','C3排名','C3数值(交易量涨跌%)','C2以前波动性','C2近期波动性','C3以前交易量','C3近期交易量']
+    total_data = total_data.reset_index(drop=True)
+    return total_data
+
 #---------------------------------------------
 st.title("股票强势系数分析-V4")
 
+st.markdown('<p style="font-size:20px; color:red;"> 数据更新日期：', unsafe_allow_html=True)
+c1_last_update_date = get_last_update_date("c1")
+st.markdown(f"注：C1数据从20230101开始提供，目前最新数据的日期为{c1_last_update_date}")
+c2_last_update_date = get_last_update_date("c2")
+st.markdown(f"注：C2数据从20230101开始提供，目前最新数据的日期为{c2_last_update_date}")
+c3_last_update_date = get_last_update_date("c3")
+st.markdown(f"注：C3数据从20020101开始提供，目前最新数据的日期为{c3_last_update_date}")
 
-with st.expander("强势系数C1"):
-    last_update_date = get_last_update_date("c1")
-    st.markdown(f"注：C1数据从20230101开始提供，目前最新数据的日期为{last_update_date}")
-    end_date = int(st.text_input("以下输入截止计算日期(如果想要最新的数据，就输入今天的日期。格式是'YYYYMMDD')",value=datetime.now().date().strftime('%Y%m%d'),key=1))
-    days_to_calculate = int(st.text_input("以下输入想要计算的交易日天数",value=5))
-    specific_stocks_to_display_raw = st.text_input("下面可以添加你特别想关注的股票（空白代表不需要添加。可接受股票代码或者名称。比如说“平安银行”或“000001.SZ”。可以同时选择多个股票，注意用逗号分离。）",value="",key=2)
-    specific_stocks_to_display = clean_stocks_to_display_input(specific_stocks_to_display_raw)
-    c1_output = calculate_c1(end_date,days_to_calculate)
-    c1_output = improve_index_column(c1_output)
-    st.markdown("以下是波动性最高的股票：")
-    display_table(c1_output)
-    if len(specific_stocks_to_display)>0:
-        st.markdown("以下是您具体关注的股票：")
-        specific_data = c1_output.loc[c1_output['股票名称'].isin(specific_stocks_to_display)].sort_values("波动性",ascending=False)
-        display_table(specific_data)
+st.markdown('<p style="font-size:20px; color:red;"> 调整参数：', unsafe_allow_html=True)
+end_date = int(st.text_input("以下输入截止计算日期(如果想要最新的数据，就输入今天的日期。格式是'YYYYMMDD')",value=datetime.now().date().strftime('%Y%m%d'),key=1))
+c1_recent_period_day_count = int(st.text_input("C1计算的交易日天数",value=5))
+c2_past_period_day_count = int(st.text_input("C2'以前'时间段的交易日天数",value=20,key=9))
+c2_recent_period_day_count = int(st.text_input("C2'近期'时间段的交易日天数",value=5,key=10))
+c3_past_period_day_count = int(st.text_input("C3'以前'时间段的交易日天数",value=20,key=7))
+c3_recent_period_day_count = int(st.text_input("C3'近期'时间段的交易日天数",value=5,key=8))
 
+specific_stocks_to_display_raw = st.text_input("下面可以添加你特别想关注的股票（空白代表不需要添加。可接受股票代码或者名称。比如说“平安银行”或“000001.SZ”。可以同时选择多个股票，注意用逗号分离。）",value="",key=2)
+specific_stocks_to_display = clean_stocks_to_display_input(specific_stocks_to_display_raw)
 
-with st.expander("强势系数C2"):
-    last_update_date = get_last_update_date("c2")
-    st.markdown(f"注：C2数据从20230101开始提供，目前最新数据的日期为{last_update_date}")
-    end_date = int(st.text_input("以下输入截止计算日期(如果想要最新的数据，就输入今天的日期。格式是'YYYYMMDD')",value=datetime.now().date().strftime('%Y%m%d'),key=3))
-    past_period_day_count = int(st.text_input("'以前'时间段的交易日天数",value=20,key=9))
-    recent_period_day_count = int(st.text_input("'近期'时间段的交易日天数",value=5,key=10))
-    specific_stocks_to_display_raw = st.text_input("下面可以添加你特别想关注的股票（空白代表不需要添加。可接受股票代码或者名称。比如说“平安银行”或“000001.SZ”。可以同时选择多个股票，注意用逗号分离。）",value="",key=4)
-    specific_stocks_to_display = clean_stocks_to_display_input(specific_stocks_to_display_raw)
-    c2_output = calculate_c2(end_date,past_period_day_count,recent_period_day_count)
-    c2_output = improve_index_column(c2_output)
-    st.markdown("以下是波动性涨跌最高的股票：")
-    display_table(c2_output)
-    if len(specific_stocks_to_display)>0:
-        st.markdown("以下是您具体关注的股票：")
-        specific_data = c2_output.loc[c2_output['股票名称'].isin(specific_stocks_to_display)].sort_values("波动性涨跌百分比",ascending=False)
-        display_table(specific_data)
+ratings_ranking = calculate_rating_rankings(end_date,c1_recent_period_day_count,c2_past_period_day_count,c2_recent_period_day_count,c3_past_period_day_count,c3_recent_period_day_count)
 
-with st.expander("强势系数C3"):
-    last_update_date = get_last_update_date("c3")
-    st.markdown(f"注：C3数据从20020101开始提供，目前最新数据的日期为{last_update_date}")
-    end_date = int(st.text_input("以下输入截止计算日期(如果想要最新的数据，就输入今天的日期。格式是'YYYYMMDD')",value=datetime.now().date().strftime('%Y%m%d'),key=5))
-    past_period_day_count = int(st.text_input("'以前'时间段的交易日天数",value=20,key=7))
-    recent_period_day_count = int(st.text_input("'近期'时间段的交易日天数",value=5,key=8))
-    specific_stocks_to_display_raw = st.text_input("下面可以添加你特别想关注的股票（空白代表不需要添加。可接受股票代码或者名称。比如说“平安银行”或“000001.SZ”。可以同时选择多个股票，注意用逗号分离。）",value="",key=6)
-    specific_stocks_to_display = clean_stocks_to_display_input(specific_stocks_to_display_raw)
-    c3_output = calculate_c3(end_date,past_period_day_count,recent_period_day_count)
-    c3_output = improve_index_column(c3_output)
-    st.markdown("以下是交易量涨跌最高的股票：")
-    display_table(c3_output)
-    if len(specific_stocks_to_display)>0:
-        st.markdown("以下是您具体关注的股票：")
-        specific_data = c3_output.loc[c3_output['股票名称'].isin(specific_stocks_to_display)].sort_values("交易量涨跌百分比",ascending=False)
-        display_table(specific_data)
-    
+st.markdown('<p style="font-size:20px; color:red;"> 强势系数排名列表：', unsafe_allow_html=True)
+st.markdown("注：点击列名称可切换排列顺序。点击列表右侧的放大按钮可全屏观看列表")
+display_table(ratings_ranking)
+
+if len(specific_stocks_to_display)>0:
+    st.markdown("以下是您具体关注的股票：")
+    specific_data = ratings_ranking.loc[ratings_ranking['股票名称'].isin(specific_stocks_to_display)].sort_values("C3数值(交易量涨跌%)",ascending=False)
+    display_table(specific_data)
